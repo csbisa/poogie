@@ -1,3 +1,6 @@
+# Generated files by Kaitai Struct
+/mh_types/generated
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
