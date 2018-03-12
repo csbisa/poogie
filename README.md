@@ -11,6 +11,18 @@ usable for you at this point.)
 
 ## Building
 
+You will need the following non-Python dependencies:
+
+* Kaitai Struct Compiler: This is used to generate Python parsers for the format
+  specifications in ``mh_types/``.
+
+Then build the package:
+
+     mkvirtualenv poogie # Optional
+     pip install -r requirements.txt
+     make -C mh_types
+     python setup.py develop
+
 ## Example
 
     ./examples/plot-monster-health.py quest.pcap
