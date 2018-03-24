@@ -1,24 +1,12 @@
 #!/usr/bin/python
 
-# Uses MHPacketProcessor to dump info from a pcap file to aid in debugging and
-# parsing.
-#
-#  ./watch.py
-# Dumps top-level block info
-#
-#  ./watch.py <id>
-# Dumps the payload for the provided ID (i.e. 0x101)
-#
-#  ./watch.py <id> <name>
-# Dumps the parsed payload for the provided ID and class name (i.e. player_movement)
-
+import argparse
 import binascii
 import importlib
-from mh_types.generated.mh4u_remote_packet import Mh4uRemotePacket
-from mh_types.generated.mh4u_data import Mh4uData
 from poogie.process import MHPacketProcessor
 from scapy.layers.inet import IP
 from scapy.utils import PcapReader
+import struct
 import sys
 
 def get_vars(obj):
@@ -26,17 +14,16 @@ def get_vars(obj):
 
 # typepkg is e.g. monster_status
 # which would return the MonsterStatus class
-def get_type(typepkg):
-    modulename = "mh_types.generated.mh4u." + typepkg
+def get_type(game, typepkg):
+    modulename = "mh_types.generated." + game + "." + typepkg
     module = importlib.import_module(modulename)
     classname = ''.join([n[0].upper() + n[1:] for n in typepkg.split('_')])
     return getattr(module, classname)
 
-idx = 1
+idx = 0
 prev_data = None
-def display(data, typeclass):
+def display(data, typeclass, time, rawpkt):
     global idx
-    global gs
     idx += 1
     # Lower layer currently doesn't deal with duplicate blocks, so this
     # works around it by ignoring duplicate sequential blocks.
@@ -48,7 +35,7 @@ def display(data, typeclass):
             return
         prev_data = data
 
-    print("Block", idx)
+    print("Block", idx, time, rawpkt[IP].src, "->", rawpkt[IP].dst, len(data))
 
     if typeclass is None:
         d = {'unknown': data}
@@ -66,30 +53,66 @@ def display(data, typeclass):
         else:
             print(k, v)
 
-pcap_file = sys.argv[1]
-if len(sys.argv) > 2:
-    typeid = int(sys.argv[2], 16)
-else:
-    typeid = None
-if len(sys.argv) > 3:
-    typeclass = get_type(sys.argv[3])
-else:
-    typeclass = None
+def process_packet(data, flags, time, rawpkt=None, typeid=None, typeclass=None):
+    if len(data) < 4:
+        return
+    (unknown2, datatype) = struct.unpack('HH', data[0:4])
+    if datatype == typeid:
+        display(data[4:], typeclass, time, rawpkt)
 
-def process_packet(block, time):
-    if block.type == typeid and block.length != 0xff:
-        display(block.data, typeclass)
+def dump_packet(data, flags, time, rawpkt=None):
+    if len(data) >= 4:
+        (unknown2, datatype) = struct.unpack('HH', data[0:4])
+    else:
+        print('Skipping short block of length', len(data), 'with flags', hex(flags))
+        return
+    print('\t'.join(["%.3f" % time, rawpkt[IP].src + "->" + rawpkt[IP].dst,
+                     hex(datatype), hex(unknown2),
+                     hex(flags), str(len(data))]))
 
-def dump_packet(block, time, rawpkt=None):
-    print('\t'.join([rawpkt[IP].src, hex(block.type), hex(block.unknown2),
-                     hex(block.unknown1), str(block.length)]))
+parser = argparse.ArgumentParser(description="Uses MHPacketProcessor to dump info from a pcap file to aid in debugging and parsing.",
+                                 formatter_class=argparse.RawDescriptionHelpFormatter,
+                                 epilog="""
+Examples:
 
-if typeid is not None:
+ watch.py <pcap_file>
+Dumps top-level block info
+
+ watch.py --id <id> <pcap_file>
+Dumps the payload for the provided ID (i.e. 0x101)
+
+ watch.py --id <id> --type <type> <pcap_file>
+Dumps the parsed payload for the provided ID and class name (i.e. player_movement)
+""")
+parser.add_argument("pcap_file", help="pcap file to parse")
+parser.add_argument("--id",
+                    help="ID to watch. See doc/types.md for more information",
+                    required=False,
+                    type=lambda x: int(x, 0))
+parser.add_argument("--type",
+                    help="Name for the type to parse the data into",
+                    required=False)
+parser.add_argument("--game",
+                    help="Game to use for types (mh4u, mhg, etc.)",
+                    default='mh4u')
+args = parser.parse_args()
+
+if args.type and not args.id:
+    print("--id must be provided with --type")
+    sys.exit(1)
+
+typeclass = None
+if args.type is not None:
+    typeclass = get_type(args.game, args.type)
+
+if args.id is not None:
     mhp = MHPacketProcessor(process_packet)
-    callback = mhp.process
+    callback = lambda x: mhp.process(x, verbose=False, rawpkt=x, typeid=args.id, typeclass=typeclass)
 else:
     mhp = MHPacketProcessor(dump_packet)
-    callback = lambda x: mhp.process(x, verbose=True, rawpkt=x)
+    callback = lambda x: mhp.process(x, verbose=False, rawpkt=x)
 
-for pkt in PcapReader(pcap_file):
+for pkt in PcapReader(args.pcap_file):
     callback(pkt)
+
+print(mhp.get_stats())
