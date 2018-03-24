@@ -57,14 +57,13 @@ types.
 
 * Monster Hunter 4 Ultimate (MH4U)
 
+* Monster Hunter Generations (MHG)
+
 ### Unsupported
 
 * Monster Hunter 3 Ultimate (MH3U): The remote packet format is the same, and
   the block and subblock formats appear to be the same. However, types are
   significantly different and the packet contents are not obfuscated.
-
-* Monster Hunter Generations (MHG): The remote packet, obfuscation, block, and
-  subblock formats are the same. Types will likely need separate definitions.
 
 * Monster Hunter XX (MHXX): Unchecked.
 
