@@ -7,7 +7,7 @@
 # You will need to edit the parameters to sniff at the end of this file to
 # capture what you're looking for.
 
-from mh_types.generated.player_movement import PlayerMovement
+from mh_types.generated.mh4u.player_movement import PlayerMovement
 from poogie.process import MHPacketProcessor
 from scapy.all import sniff
 import sys
@@ -63,10 +63,13 @@ def display(data):
         # TODO Name isn't tracked so we just use 'test.'
         print('test', action)
 
-def process_packet(block, time):
+def process_packet(data, flags, time):
+    if len(data) < 4:
+        return
+    datatype = int.from_bytes(data[2:4], byteorder='little')
     # 101 is only for the first player, 102/103/104 would be for other players
-    if block.type == 0x101 and block.length != 0xff:
-        display(block.data)
+    if datatype == 0x101:
+        display(data)
 
 mhp = MHPacketProcessor(process_packet)
 

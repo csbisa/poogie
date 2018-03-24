@@ -15,9 +15,12 @@ import sys
 pcap_file = sys.argv[1]
 health = []
 
-def process_packet(block, time):
-    if block.type == 0x105 and block.length != 0xff:
-        status = MonsterStatus.from_bytes(block.data)
+def process_packet(data, flags, time):
+    if len(data) < 4:
+        return
+    datatype = int.from_bytes(data[2:4], byteorder='little')
+    if datatype == 0x105:
+        status = MonsterStatus.from_bytes(data[4:])
         health.append([status.id, status.health, time])
 
 mhp = MHPacketProcessor(process_packet)
