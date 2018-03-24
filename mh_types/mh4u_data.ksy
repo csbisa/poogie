@@ -20,7 +20,7 @@ types:
       - id: length
         type: u2
       - id: seqnum
-        size: 4
+        type: u4be
       - id: random
         size: 8
       - id: data
@@ -31,27 +31,33 @@ types:
         value: (((flags & 0x40) >> 6) * 0x100) + length
   subblockhdr:
     seq:
-    - id: unknown1
-      type: u2
-    - id: unknown2
-      type: u2
+    - id: seq1
+      type: u2be
+    - id: seq2
+      type: u2be
     - id: unknown3
       type: u1
     - id: count
       type: u1
     - id: blocks
       type: subblock
-      repeat: eos
+      repeat: expr
+      repeat-expr: count
   subblock:
     seq:
-      - id: unknown1
+      - id: flags
         type: u1
-      - id: length
+        doc: |
+          * 0x02: Health check packet
+          * 0x10: Empty subblock (accompanied by length of 0xFE or 0xFF).
+          * 0x20: Initial transmit. On retransmits, this bit is not set.
+          * 0x40: Data spans multiple subblocks.
+      - id: length_spec
         type: u1
-      - id: unknown2
-        type: u2
-      - id: type
-        type: u2
+        doc: Specifies the length of the data. If this value is 0xFE or 0xFF,
+             the length of the data is 4.
       - id: data
-        size: length-4
-        if: length != 0xFF and length != 0xFE and length >= 4
+        size: length
+    instances:
+      length:
+        value: '(length_spec & 0xFE) != 0xFE ? length_spec : 4'
